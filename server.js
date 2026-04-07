@@ -50,20 +50,37 @@ app.post('/save-log', async (req, res) => {
   try {
     const { food, calories, confidence, token } = req.body;
 
-    // Verify the user token
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) return res.status(401).json({ error: 'Unauthorised' });
+    if (!token) return res.status(401).json({ error: "No token provided" });
 
-    const { data, error } = await supabase
+    // 1. Create a "User-Specific" client using their token
+    const userSupabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY, // Use Anon key here
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+
+    // 2. Get the User ID from the token automatically
+    const { data: { user }, error: authError } = await userSupabase.auth.getUser();
+    if (authError || !user) throw new Error("Invalid token");
+
+    // 3. Insert the log (RLS will now allow this because it sees the User)
+    const { data, error } = await userSupabase
       .from('food_logs')
-      .insert({ user_id: user.id, food, calories, confidence });
+      .insert([
+        { 
+          food, 
+          calories, 
+          confidence, 
+          user_id: user.id 
+        }
+      ]);
 
     if (error) throw error;
-    res.json({ success: true });
 
+    res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to save log' });
+    console.error("Save Log Error:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
