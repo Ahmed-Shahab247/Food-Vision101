@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CalSnap – Calorie Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0d0d; --surface: #161616; --surface2: #1f1f1f;
+    --border: #2a2a2a; --accent: #c8f135; --accent2: #a8d420;
+    --text: #f0f0f0; --muted: #888; --danger: #ff5c5c; --radius: 16px;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+  /* AUTH PAGE */
+  #auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .auth-box { background: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 48px 40px; width: 100%; max-width: 420px; }
+  .auth-logo { font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+  .auth-logo span { color: var(--accent); }
+  .auth-tagline { color: var(--muted); font-size: 14px; margin-bottom: 36px; }
+  .auth-tabs { display: flex; gap: 4px; background: var(--surface2); border-radius: 10px; padding: 4px; margin-bottom: 28px; }
+  .auth-tab { flex: 1; padding: 8px; border: none; background: none; border-radius: 8px; color: var(--muted); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .auth-tab.active { background: var(--surface); color: var(--text); }
+  .auth-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; margin-bottom: 12px; display: block; }
+  .auth-input:focus { border-color: var(--accent); }
+  .auth-btn { width: 100%; padding: 14px; background: var(--accent); color: #0d0d0d; border: none; border-radius: 10px; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-bottom: 12px; }
+  .auth-btn:hover { background: var(--accent2); }
+  .auth-btn.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .auth-btn.secondary:hover { border-color: var(--accent); }
+  .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; margin: 16px 0; }
+  .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .guest-btn { width: 100%; padding: 12px; background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; margin-top: 8px; transition: color 0.2s; }
+  .guest-btn:hover { color: var(--text); }
+  .auth-error { background: rgba(255,92,92,0.1); border: 1px solid rgba(255,92,92,0.3); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--danger); margin-bottom: 12px; display: none; }
+
+  /* APP */
+  #app-page { display: none; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 100; }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; }
+  .logo span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .user-badge { background: var(--surface); border: 1px solid var(--border); border-radius: 100px; padding: 6px 14px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .user-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .signout-btn { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; color: var(--muted); font-size: 13px; cursor: pointer; transition: all 0.2s; }
+  .signout-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 40px 24px; display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
+  @media (max-width: 768px) { main { grid-template-columns: 1fr; } header { padding: 16px 20px; } }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; }
+  .card-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 20px; }
+
+  .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(200,241,53,0.04); }
+  .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { width: 56px; height: 56px; background: var(--surface2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 24px; }
+  .upload-zone h3 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .upload-zone p { color: var(--muted); font-size: 14px; }
+
+  #preview-container { display: none; margin-top: 20px; border-radius: 12px; overflow: hidden; }
+  #preview-img { width: 100%; height: 220px; object-fit: cover; display: block; }
+
+  #analyze-btn { width: 100%; margin-top: 16px; padding: 16px; background: var(--accent); color: #0d0d0d; border: none; border-radius: 12px; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: none; align-items: center; justify-content: center; gap: 8px; }
+  #analyze-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+  #analyze-btn.loading { opacity: 0.7; pointer-events: none; }
+
+  #result-card { display: none; margin-top: 20px; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; animation: slideUp 0.3s ease; }
+  .result-food { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; text-transform: capitalize; margin-bottom: 4px; }
+  .result-confidence { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .result-calories { display: flex; align-items: baseline; gap: 6px; margin-bottom: 16px; }
+  .cal-number { font-family: 'Syne', sans-serif; font-size: 42px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .cal-label { font-size: 14px; color: var(--muted); }
+  #add-log-btn { width: 100%; padding: 12px; background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 10px; font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  #add-log-btn:hover { background: rgba(200,241,53,0.1); }
+
+  .right-col { display: flex; flex-direction: column; gap: 24px; }
+
+  .goal-ring { position: relative; width: 140px; height: 140px; margin: 0 auto 16px; }
+  .goal-ring svg { transform: rotate(-90deg); }
+  .goal-ring-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .goal-consumed { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; line-height: 1; }
+  .goal-total { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .goal-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .goal-stat { background: var(--surface2); border-radius: 10px; padding: 12px; text-align: center; }
+  .goal-stat-num { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
+  .goal-stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .goal-setter { display: flex; gap: 8px; margin-top: 16px; }
+  .goal-setter input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  .goal-setter input:focus { border-color: var(--accent); }
+  .goal-setter button { padding: 10px 16px; background: var(--accent); color: #0d0d0d; border: none; border-radius: 10px; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+  .goal-setter button:hover { background: var(--accent2); }
+
+  #eod-banner { display: none; background: linear-gradient(135deg, rgba(200,241,53,0.15), rgba(200,241,53,0.05)); border: 1px solid rgba(200,241,53,0.3); border-radius: 12px; padding: 20px; margin-bottom: 20px; animation: slideUp 0.4s ease; }
+  .eod-title { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 12px; }
+  .eod-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .eod-stat { text-align: center; }
+  .eod-stat-num { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; }
+  .eod-stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  #log-list { display: flex; flex-direction: column; gap: 10px; }
+  .log-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border-radius: 10px; padding: 12px 16px; animation: slideUp 0.3s ease; }
+  .log-item-left { display: flex; align-items: center; gap: 12px; }
+  .log-emoji { width: 36px; height: 36px; background: var(--surface); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .log-food-name { font-weight: 500; font-size: 14px; text-transform: capitalize; }
+  .log-time { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .log-calories { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; color: var(--accent); }
+  .delete-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; margin-left: 8px; border-radius: 6px; transition: color 0.2s; font-size: 14px; }
+  .delete-btn:hover { color: var(--danger); }
+  .empty-log { text-align: center; color: var(--muted); font-size: 14px; padding: 24px; }
+
+  .progress-bar { height: 6px; background: var(--surface2); border-radius: 100px; overflow: hidden; margin-top: 12px; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 100px; transition: width 0.5s ease; }
+  .progress-fill.over { background: var(--danger); }
+
+  .guest-notice { background: rgba(200,241,53,0.06); border: 1px solid rgba(200,241,53,0.2); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--muted); margin-bottom: 20px; display: none; }
+
+  .spinner { width: 18px; height: 18px; border: 2px solid rgba(13,13,13,0.3); border-top-color: #0d0d0d; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<!-- AUTH PAGE -->
+<div id="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo">Cal<span>Snap</span></div>
+    <div class="auth-tagline">Track your calories with AI — snap, identify, log.</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchTab('login')">Sign in</button>
+      <button class="auth-tab" onclick="switchTab('signup')">Sign up</button>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+    <input class="auth-input" type="email" id="auth-email" placeholder="Email address"/>
+    <input class="auth-input" type="password" id="auth-password" placeholder="Password"/>
+    <button class="auth-btn" id="auth-submit-btn" onclick="handleEmailAuth()">Sign in</button>
+    <div class="auth-divider">or</div>
+    <button class="auth-btn secondary" onclick="handleGoogleAuth()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.96L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+      Continue with Google
+    </button>
+    <button class="guest-btn" onclick="continueAsGuest()">Continue as guest (no account needed)</button>
+  </div>
+</div>
+
+<!-- APP PAGE -->
+<div id="app-page">
+  <header>
+    <div class="logo">Cal<span>Snap</span></div>
+    <div class="header-right">
+      <div class="user-badge"><div class="user-dot"></div><span id="user-label">Guest</span></div>
+      <button class="signout-btn" onclick="handleSignOut()">Sign out</button>
+    </div>
+  </header>
+  <main>
+    <div class="left-col">
+      <div class="card">
+        <div class="card-title">Snap your meal</div>
+        <div class="guest-notice" id="guest-notice">
+          👋 Guest mode — logs save locally. <a href="#" onclick="showAuth()" style="color:var(--accent)">Sign up</a> to sync across devices.
+        </div>
+        <div id="eod-banner">
+          <div class="eod-title">🌙 Today's summary</div>
+          <div class="eod-stats">
+            <div class="eod-stat"><div class="eod-stat-num" id="eod-total">0</div><div class="eod-stat-label">total kcal</div></div>
+            <div class="eod-stat"><div class="eod-stat-num" id="eod-goal">0</div><div class="eod-stat-label">daily goal</div></div>
+            <div class="eod-stat"><div class="eod-stat-num" id="eod-diff">0</div><div class="eod-stat-label" id="eod-diff-label">under goal</div></div>
+          </div>
+        </div>
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" accept="image/*"/>
+          <div class="upload-icon">📷</div>
+          <h3>Drop a food photo</h3>
+          <p>or click to browse</p>
+        </div>
+        <div id="preview-container"><img id="preview-img" src="" alt="Food preview"/></div>
+        <button id="analyze-btn"><span id="btn-text">Analyse food</span></button>
+        <div id="result-card">
+          <div class="result-food" id="result-food-name"></div>
+          <div class="result-confidence" id="result-confidence"></div>
+          <div class="result-calories">
+            <div class="cal-number" id="result-calories"></div>
+            <div class="cal-label">kcal per 100g</div>
+          </div>
+          <button id="add-log-btn">+ Add to today's log</button>
+        </div>
+      </div>
+    </div>
+    <div class="right-col">
+      <div class="card">
+        <div class="card-title">Today's goal</div>
+        <div style="text-align:center;margin-bottom:20px">
+          <div class="goal-ring">
+            <svg width="140" height="140" viewBox="0 0 140 140">
+              <circle cx="70" cy="70" r="58" fill="none" stroke="#1f1f1f" stroke-width="10"/>
+              <circle id="progress-circle" cx="70" cy="70" r="58" fill="none" stroke="#c8f135" stroke-width="10" stroke-dasharray="364.4" stroke-dashoffset="364.4" stroke-linecap="round" style="transition:stroke-dashoffset 0.5s ease"/>
+            </svg>
+            <div class="goal-ring-text">
+              <div class="goal-consumed" id="consumed-display">0</div>
+              <div class="goal-total" id="goal-total-display">/ 2000 kcal</div>
+            </div>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+          <div class="goal-stats" style="margin-top:16px">
+            <div class="goal-stat"><div class="goal-stat-num" id="remaining-display">2000</div><div class="goal-stat-label">remaining</div></div>
+            <div class="goal-stat"><div class="goal-stat-num" id="logged-count">0</div><div class="goal-stat-label">items logged</div></div>
+          </div>
+        </div>
+        <div class="goal-setter">
+          <input type="number" id="goal-input" placeholder="Set daily goal (kcal)" min="500" max="10000"/>
+          <button onclick="setGoal()">Set</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Today's log</div>
+        <div id="log-list"><div class="empty-log">No meals logged yet 🍽️</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://pjaujolbocbwucezsivy.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqYXVqb2xib2Nid3VjZXpzaXZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MTE5OTYsImV4cCI6MjA5MDM4Nzk5Nn0.mIszhDIAUa1FslKA-SybOWMdePefA68vwhQplG08IX0';
+  const BACKEND_URL = 'http://localhost:3000';
+
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentUser = null, isGuest = false, currentFile = null, currentResult = null;
+  let dailyGoal = 2000, logs = [], authMode = 'login';
+
+  async function init() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) { currentUser = session.user; await enterApp(); return; }
+    if (localStorage.getItem('guestMode') === 'true') { isGuest = true; await enterApp(); return; }
+    showAuthPage();
+  }
+
+  function showAuthPage() {
+    document.getElementById('auth-page').style.display = 'flex';
+    document.getElementById('app-page').style.display = 'none';
+  }
+
+  function showAuth() {
+    isGuest = false; localStorage.removeItem('guestMode'); showAuthPage();
+  }
+
+  function switchTab(mode) {
+    authMode = mode;
+    document.querySelectorAll('.auth-tab').forEach((t, i) => t.classList.toggle('active', (mode==='login'&&i===0)||(mode==='signup'&&i===1)));
+    document.getElementById('auth-submit-btn').textContent = mode === 'login' ? 'Sign in' : 'Create account';
+    document.getElementById('auth-error').style.display = 'none';
+  }
+
+  async function handleEmailAuth() {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const errEl = document.getElementById('auth-error');
+    errEl.style.display = 'none';
+    if (!email || !password) { errEl.textContent = 'Please enter email and password.'; errEl.style.display = 'block'; return; }
+    const btn = document.getElementById('auth-submit-btn');
+    btn.textContent = 'Please wait...'; btn.disabled = true;
+    try {
+      const result = authMode === 'login'
+        ? await sb.auth.signInWithPassword({ email, password })
+        : await sb.auth.signUp({ email, password });
+      if (result.error) { errEl.textContent = result.error.message; errEl.style.display = 'block'; return; }
+      currentUser = result.data.user;
+      await enterApp();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = authMode === 'login' ? 'Sign in' : 'Create account';
+    }
+  }
+
+  async function handleGoogleAuth() {
+    const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
+    if (error) { const e = document.getElementById('auth-error'); e.textContent = error.message; e.style.display = 'block'; }
+  }
+
+  function continueAsGuest() { isGuest = true; localStorage.setItem('guestMode', 'true'); enterApp(); }
+
+  async function handleSignOut() {
+    if (!isGuest) await sb.auth.signOut();
+    currentUser = null; isGuest = false; logs = [];
+    localStorage.removeItem('guestMode');
+    showAuthPage();
+  }
+
+  async function enterApp() {
+    document.getElementById('auth-page').style.display = 'none';
+    document.getElementById('app-page').style.display = 'block';
+    if (isGuest) {
+      document.getElementById('user-label').textContent = 'Guest';
+      document.getElementById('guest-notice').style.display = 'block';
+      dailyGoal = parseInt(localStorage.getItem('dailyGoal')) || 2000;
+      const today = new Date().toDateString();
+      logs = (JSON.parse(localStorage.getItem('logs') || '[]')).filter(l => new Date(l.timestamp).toDateString() === today);
+    } else {
+      document.getElementById('user-label').textContent = (currentUser.email || 'User').split('@')[0];
+      document.getElementById('guest-notice').style.display = 'none';
+      await loadProfile(); await loadLogsFromDB();
+    }
+    setupUpload(); updateGoal(); renderLog(); checkEndOfDay();
+  }
+
+  async function loadProfile() {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(`${BACKEND_URL}/get-profile`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const data = await res.json();
+      if (data.daily_goal) dailyGoal = data.daily_goal;
+    } catch(e) { dailyGoal = 2000; }
+  }
+
+  async function loadLogsFromDB() {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch(`${BACKEND_URL}/get-logs`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+      logs = await res.json();
+    } catch(e) { logs = []; }
+  }
+
+  function setupUpload() {
+    const fileInput = document.getElementById('file-input');
+    const uploadZone = document.getElementById('upload-zone');
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) handleFile(f); });
+    fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+    document.getElementById('analyze-btn').addEventListener('click', analyseFood);
+    document.getElementById('add-log-btn').addEventListener('click', addToLog);
+  }
+
+  function handleFile(file) {
+    currentFile = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('preview-img').src = e.target.result;
+      document.getElementById('preview-container').style.display = 'block';
+      document.getElementById('analyze-btn').style.display = 'flex';
+      document.getElementById('result-card').style.display = 'none';
+      currentResult = null;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyseFood() {
+    if (!currentFile) return;
+    const btn = document.getElementById('analyze-btn');
+    const btnText = document.getElementById('btn-text');
+    btn.classList.add('loading');
+    btnText.innerHTML = '<span class="spinner"></span> Analysing...';
+    try {
+      const formData = new FormData();
+      formData.append('image', currentFile);
+      const res = await fetch(`${BACKEND_URL}/log-food`, { method: 'POST', body: formData });
+      const data = await res.json();
+      currentResult = data;
+      document.getElementById('result-food-name').textContent = data.food.replace(/_/g, ' ');
+      document.getElementById('result-confidence').textContent = `${data.confidence}% confidence`;
+      document.getElementById('result-calories').textContent = data.calories ?? '—';
+      document.getElementById('result-card').style.display = 'block';
+    } catch(err) {
+      alert('Something went wrong. Make sure your backend is running.');
+    } finally {
+      btn.classList.remove('loading');
+      btnText.textContent = 'Analyse food';
+    }
+  }
+
+  async function addToLog() {
+    if (!currentResult) return;
+    const entry = { id: Date.now(), food: currentResult.food, calories: currentResult.calories || 0, confidence: currentResult.confidence, timestamp: new Date().toISOString(), logged_at: new Date().toISOString() };
+    if (isGuest) {
+      logs.push(entry);
+      localStorage.setItem('logs', JSON.stringify(logs));
+    } else {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        await fetch(`${BACKEND_URL}/save-log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ food: currentResult.food, calories: currentResult.calories, confidence: currentResult.confidence, token: session.access_token }) });
+        await loadLogsFromDB();
+      } catch(e) { console.error(e); }
+    }
+    updateGoal(); renderLog(); checkEndOfDay();
+    document.getElementById('result-card').style.display = 'none';
+    document.getElementById('preview-container').style.display = 'none';
+    document.getElementById('analyze-btn').style.display = 'none';
+    currentFile = null; currentResult = null;
+    document.getElementById('file-input').value = '';
+  }
+
+  async function deleteLog(id) {
+    if (isGuest) {
+      logs = logs.filter(l => l.id !== id);
+      localStorage.setItem('logs', JSON.stringify(logs));
+    } else {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        await fetch(`${BACKEND_URL}/delete-log/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${session.access_token}` } });
+        await loadLogsFromDB();
+      } catch(e) { console.error(e); }
+    }
+    updateGoal(); renderLog(); checkEndOfDay();
+  }
+
+  async function setGoal() {
+    const val = parseInt(document.getElementById('goal-input').value);
+    if (val >= 500 && val <= 10000) {
+      dailyGoal = val;
+      if (isGuest) {
+        localStorage.setItem('dailyGoal', val);
+      } else {
+        try {
+          const { data: { session } } = await sb.auth.getSession();
+          await fetch(`${BACKEND_URL}/set-goal`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal: val, token: session.access_token }) });
+        } catch(e) { console.error(e); }
+      }
+      document.getElementById('goal-input').value = '';
+      updateGoal();
+    }
+  }
+
+  function updateGoal() {
+    const consumed = logs.reduce((sum, l) => sum + (l.calories || 0), 0);
+    const remaining = Math.max(0, dailyGoal - consumed);
+    const pct = Math.min(100, (consumed / dailyGoal) * 100);
+    document.getElementById('consumed-display').textContent = consumed;
+    document.getElementById('goal-total-display').textContent = `/ ${dailyGoal} kcal`;
+    document.getElementById('remaining-display').textContent = remaining;
+    document.getElementById('logged-count').textContent = logs.length;
+    const offset = 364.4 - (pct / 100) * 364.4;
+    const circle = document.getElementById('progress-circle');
+    circle.style.strokeDashoffset = offset;
+    circle.style.stroke = consumed > dailyGoal ? '#ff5c5c' : '#c8f135';
+    const fill = document.getElementById('progress-fill');
+    fill.style.width = pct + '%';
+    fill.classList.toggle('over', consumed > dailyGoal);
+  }
+
+  function checkEndOfDay() {
+    const hour = new Date().getHours();
+    const consumed = logs.reduce((sum, l) => sum + (l.calories || 0), 0);
+    const banner = document.getElementById('eod-banner');
+    if (hour >= 23 || consumed >= dailyGoal) {
+      const diff = Math.abs(consumed - dailyGoal);
+      const under = consumed <= dailyGoal;
+      document.getElementById('eod-total').textContent = consumed;
+      document.getElementById('eod-goal').textContent = dailyGoal;
+      document.getElementById('eod-diff').textContent = diff;
+      document.getElementById('eod-diff').style.color = under ? 'var(--accent)' : 'var(--danger)';
+      document.getElementById('eod-diff-label').textContent = under ? 'under goal ✓' : 'over goal';
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  const foodEmojis = { pizza:'🍕',sushi:'🍣',hamburger:'🍔',hot_dog:'🌭',tacos:'🌮',ice_cream:'🍦',cake:'🎂',salad:'🥗',ramen:'🍜',steak:'🥩',chicken:'🍗',fish:'🐟',apple:'🍎',banana:'🍌',default:'🍽️' };
+  function getEmoji(food) { const k = Object.keys(foodEmojis).find(k => food.includes(k)); return foodEmojis[k] || foodEmojis.default; }
+
+  function renderLog() {
+    const list = document.getElementById('log-list');
+    if (!logs.length) { list.innerHTML = '<div class="empty-log">No meals logged yet 🍽️</div>'; return; }
+    list.innerHTML = [...logs].reverse().map(l => `
+      <div class="log-item">
+        <div class="log-item-left">
+          <div class="log-emoji">${getEmoji(l.food)}</div>
+          <div>
+            <div class="log-food-name">${l.food.replace(/_/g,' ')}</div>
+            <div class="log-time">${new Date(l.logged_at||l.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center">
+          <div class="log-calories">${l.calories} kcal</div>
+          <button class="delete-btn" onclick="deleteLog(${l.id})">✕</button>
+        </div>
+      </div>`).join('');
+  }
+
+  init();
+</script>
+</body>
+</html>
