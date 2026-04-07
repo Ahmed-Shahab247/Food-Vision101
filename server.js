@@ -157,21 +157,29 @@ app.post('/set-goal', async (req, res) => {
 app.get('/get-profile', async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) return res.status(401).json({ error: 'Unauthorised' });
+    const userSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    });
 
-    const { data, error } = await supabase
+    const { data: { user } } = await userSupabase.auth.getUser();
+
+    // Change .single() to .maybeSingle()
+    const { data, error } = await userSupabase
       .from('profiles')
-      .select('daily_goal')
+      .select('*')
       .eq('id', user.id)
-      .single();
+      .maybeSingle(); // This returns null instead of crashing if no row is found
 
     if (error) throw error;
-    res.json(data);
 
+    // If no profile exists, send a default one back
+    if (!data) {
+      return res.json({ daily_goal: 2000 });
+    }
+
+    res.json(data);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch profile' });
+    res.status(500).json({ error: err.message });
   }
 });
 
